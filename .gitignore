@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Personal inputs (never commit)
+resumes/
+profile.txt
+job_description.txt
+
+# Generated outputs
+tailored_resume*.pdf
+tailored_resume.md
+*Resume.pdf
+*Cover Letter*.docx
