@@ -47,6 +47,8 @@ All LLM calls use Google Gemini (`gemini-3.1-flash-lite`) via
 | `resume_loader.py` | Loads resume versions from `resumes/` (.docx/.md/.txt) |
 | `pdf_renderer.py` | Renders the tailored resume to an ATS-friendly PDF (fpdf2) |
 | `docx_writer.py` | Writes the cover letter to a .docx |
+| `job_fetcher.py` | Fetches a job posting's text from a URL (static-HTML sites) |
+| `tracker.py` | Appends each run to a local `applications.csv` tracker |
 | `main.py` | Entry point: loads inputs, runs the graph, saves outputs |
 
 ## Setup
@@ -89,8 +91,18 @@ All LLM calls use Google Gemini (`gemini-3.1-flash-lite`) via
 ## Run
 
 ```powershell
-py main.py
+py main.py                        # uses job_description.txt
+py main.py https://jobs.example.com/posting/123   # fetches the posting from a URL
 ```
+
+URL fetching works for career sites that serve static HTML (Greenhouse,
+Lever, most company sites). JavaScript- or login-gated sites (LinkedIn,
+Indeed) fail with a clear message — paste those into
+`job_description.txt` manually. A fetched posting is saved to
+`job_description.txt` as a record of what was tailored against.
+
+Every run is appended to `applications.csv` (date, company, role, score,
+files) — your local application tracker.
 
 Outputs land in the project root:
 

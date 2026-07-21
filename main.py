@@ -7,6 +7,7 @@ sample), runs the select->write->critique loop, and saves the result.
 
 import os
 import re
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,6 +16,8 @@ load_dotenv()  # reads .env in this folder before anything needs the key
 
 from docx_writer import write_cover_letter_docx
 from graph import app
+from job_fetcher import FetchError, fetch_job_description
+from tracker import log_application
 from pdf_renderer import render_pdf
 from resume_loader import load_resumes
 from state import TailoringState
@@ -102,8 +105,21 @@ def strip_excluded_roles(resume_text: str) -> str:
     return "\n".join(kept)
 
 
-def load_job_description() -> str:
-    """Read the target job description from file, or use the sample."""
+def load_job_description(url: str = "") -> str:
+    """Get the job description: from a URL if given, else from file.
+
+    A fetched posting is also written to job_description.txt so there is
+    a local record of exactly what was tailored against.
+    """
+    if url:
+        print(f"Fetching job posting from {url} ...")
+        try:
+            text = fetch_job_description(url)
+        except FetchError as exc:
+            raise SystemExit(f"\n{exc}") from exc
+        JOB_DESCRIPTION_FILE.write_text(text, encoding="utf-8")
+        print(f"Fetched {len(text)} chars; saved to {JOB_DESCRIPTION_FILE.name}")
+        return text
     if JOB_DESCRIPTION_FILE.is_file():
         text = JOB_DESCRIPTION_FILE.read_text(encoding="utf-8").strip()
         if text:
@@ -116,6 +132,16 @@ def load_job_description() -> str:
 def main() -> None:
     ensure_api_key()
 
+    job_url = ""
+    if len(sys.argv) > 1:
+        if sys.argv[1].startswith(("http://", "https://")):
+            job_url = sys.argv[1]
+        else:
+            raise SystemExit(
+                f"Unrecognized argument: {sys.argv[1]}\n"
+                "Usage: py main.py [job_posting_url]"
+            )
+
     candidates, master = load_resumes()
     print(f"Loaded {len(candidates)} resume versions: {list(candidates)}")
     print(f"Master resume {'loaded' if master else 'NOT found'} "
@@ -127,7 +153,7 @@ def main() -> None:
     print(f"Candidate profile {'loaded' if profile else 'NOT found (profile.txt)'}")
 
     initial_state: TailoringState = {
-        "job_description": load_job_description(),
+        "job_description": load_job_description(job_url),
         "job_company": "",
         "job_role": "",
         "available_resumes": candidates,
@@ -159,13 +185,22 @@ def main() -> None:
 
     resume_text = strip_excluded_sections(final_state["tailored_resume"])
     resume_text = strip_excluded_roles(resume_text)
+    # Drop placeholder lines like "[INSERT VIDEO LINK HERE]" — artifacts of
+    # instructions embedded in untrusted job descriptions.
+    resume_text = "\n".join(
+        l for l in resume_text.splitlines() if not re.fullmatch(r"\[.*\]", l.strip())
+    ).lstrip("\n")
     OUTPUT_FILE.write_text(resume_text, encoding="utf-8")
 
-    resume_lines = [l.strip() for l in resume_text.splitlines() if l.strip()]
-    applicant_name = resume_lines[0] if resume_lines else "Applicant"
+    # Applicant name/contact come from the user's own base resume, not the
+    # AI output, so untrusted JD content can never reach the filename.
+    base_lines = [
+        l.strip() for l in final_state["base_resume"].splitlines() if l.strip()
+    ]
+    applicant_name = base_lines[0] if base_lines else "Applicant"
     if applicant_name.isupper():
         applicant_name = applicant_name.title()
-    contact_line = resume_lines[1] if len(resume_lines) > 1 else ""
+    contact_line = base_lines[1] if len(base_lines) > 1 else ""
     company = final_state["job_company"] or "Company"
     role = final_state["job_role"] or "Role"
     base_name = safe_filename(f"{applicant_name} - {company} {role}")
@@ -173,6 +208,7 @@ def main() -> None:
     pdf_path = render_pdf(resume_text, PROJECT_DIR / f"{base_name} Resume.pdf")
     print(f"\nTailored resume saved to: {OUTPUT_FILE.name} and {pdf_path.name}")
 
+    docx_path = None
     if final_state["cover_letter"]:
         docx_path = write_cover_letter_docx(
             final_state["cover_letter"],
@@ -181,6 +217,17 @@ def main() -> None:
             contact_line,
         )
         print(f"Cover letter saved to: {docx_path.name}")
+
+    tracker_path = log_application(
+        company=company,
+        role=role,
+        ats_score=max(final_state["best_score"], final_state["ats_score"]),
+        resume_version=final_state["selected_resume_name"],
+        resume_file=pdf_path.name,
+        cover_letter_file=docx_path.name if docx_path else "",
+        job_url=job_url,
+    )
+    print(f"Logged to tracker: {tracker_path.name}")
 
     print("\nTAILORED RESUME:\n")
     print(final_state["tailored_resume"])

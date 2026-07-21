@@ -5,3 +5,5 @@ pydantic
 python-docx
 fpdf2
 python-dotenv
+requests
+beautifulsoup4
