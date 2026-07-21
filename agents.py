@@ -222,6 +222,12 @@ products or services named only in the job description. If the resume \
 says "GCP" but never "Cloud Run" or "GKE", you may claim GCP experience \
 only in general terms — naming a specific service the candidate has not \
 listed is fabrication.
+- NO TITLE/SENIORITY DISTORTION: never change an employer's job title, \
+seniority level, or employment type (e.g. downgrading "Software \
+Engineer" to "Intern", or the reverse) to better match the target \
+role's level. If the BASE RESUME and MASTER RESUME disagree on a title \
+for the same employer, use the BASE RESUME's version — never pick \
+whichever version happens to match the job description.
 
 PERSONAL STATUS — zero tolerance:
 - NEVER state or imply citizenship, nationality, visa status, work \
@@ -233,6 +239,10 @@ candidate's header counts as fabrication.
 - If the job description requires a status the CANDIDATE PROFILE does not \
 support (e.g. requires US citizenship but the candidate is not a citizen), \
 simply OMIT the topic from the resume entirely. Do not lie, do not hint.
+- YEARS OF EXPERIENCE: never calculate this from employment dates. Use \
+EXACTLY the phrase given in the CANDIDATE PROFILE's "Years of experience" \
+line, verbatim, every time — even if the job description asks for a \
+different amount, even if the dates would imply a different number.
 
 COMPLETENESS — tailoring is rephrasing, NOT trimming:
 - Preserve EVERY section of the base resume (summary, skills, every \
@@ -404,6 +414,14 @@ PROFILE. If the tailored resume makes such a claim the \
 profile does not support, cap the score at 40 and make removing it the \
 first feedback item. Never reward status claims for matching the job \
 description.
+- Years of experience: the resume must state EXACTLY the phrase from the \
+CANDIDATE PROFILE's "Years of experience" line. Flag and deduct if it \
+states any other number or phrase, even if closer to what the job \
+description asks for or to what the employment dates would imply.
+- Title/seniority distortion: an employer's job title, seniority level, \
+or employment type in the tailored resume must match the BASE RESUME. \
+Flag and deduct heavily if it was changed (e.g. to "Intern" or a more \
+junior/senior title) to better match the target role's level.
 
 Today's date is {current_date}. Use it when judging whether employment \
 dates are plausible.
