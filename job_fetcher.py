@@ -1,12 +1,15 @@
 """Fetches a job posting's text from a URL.
 
 Works for career sites that serve the posting as server-rendered HTML
-(Greenhouse, Lever, Workday public pages, most company career sites).
-Sites that require JavaScript rendering or a login (LinkedIn, Indeed)
-will fail with a clear message — paste those into job_description.txt
-manually instead.
+(Greenhouse, Lever, Workday public pages, most company career sites),
+plus any site that embeds a schema.org JobPosting JSON-LD block (common
+even on JavaScript-heavy sites, since it's there for search engine SEO).
+Sites that require JavaScript rendering with no JSON-LD, or a login
+(LinkedIn, Indeed), fail with a clear message — paste those into
+job_description.txt manually instead.
 """
 
+import json
 import re
 
 import requests
@@ -21,6 +24,7 @@ HEADERS = {
 }
 
 MIN_TEXT_LENGTH = 300
+MIN_ALPHA_RATIO = 0.75  # rejects JSON/CSS/JS blobs mistaken for prose
 
 STRIP_TAGS = ["script", "style", "noscript", "svg", "iframe", "form"]
 CONTENT_SELECTORS = [
@@ -67,6 +71,55 @@ def _fetch_workday(url: str) -> str:
     return "\n".join(header + ["", text])
 
 
+def _alpha_ratio(text: str) -> float:
+    """Fraction of non-whitespace characters that are letters.
+
+    Real prose runs ~0.9+; JSON/CSS/JS blobs (braces, quotes, hex colors,
+    commas) run much lower — used to reject scraped garbage that happens
+    to clear the length threshold.
+    """
+    non_ws = [c for c in text if not c.isspace()]
+    if not non_ws:
+        return 0.0
+    return sum(1 for c in non_ws if c.isalpha()) / len(non_ws)
+
+
+def _looks_like_prose(text: str) -> bool:
+    return len(text) >= MIN_TEXT_LENGTH and _alpha_ratio(text) >= MIN_ALPHA_RATIO
+
+
+def _extract_json_ld_posting(html: str) -> str:
+    """Extract a schema.org JobPosting embedded as JSON-LD, if present.
+
+    Many career sites (including JavaScript single-page apps that render
+    no readable body text) still embed this block for search engine SEO,
+    making it the most reliable extraction path when available.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            data = json.loads(script.string or "")
+        except (ValueError, TypeError):
+            continue
+        candidates = data if isinstance(data, list) else data.get("@graph", [data])
+        for item in candidates:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("@type", "")).lower() != "jobposting":
+                continue
+            desc_html = item.get("description", "")
+            desc = _clean_text(
+                BeautifulSoup(desc_html, "html.parser").get_text("\n")
+            )
+            if not _looks_like_prose(desc):
+                continue
+            org = item.get("hiringOrganization", {})
+            org_name = org.get("name") if isinstance(org, dict) else org
+            header = [v for v in (item.get("title"), org_name) if v]
+            return "\n".join(header + ["", desc])
+    return ""
+
+
 def fetch_job_description(url: str) -> str:
     """Download and extract readable job posting text from a URL."""
     if "myworkdayjobs.com" in url:
@@ -76,6 +129,10 @@ def fetch_job_description(url: str) -> str:
         resp.raise_for_status()
     except requests.RequestException as exc:
         raise FetchError(f"Could not download {url}: {exc}") from exc
+
+    json_ld_text = _extract_json_ld_posting(resp.text)
+    if json_ld_text:
+        return json_ld_text
 
     soup = BeautifulSoup(resp.text, "html.parser")
     for tag in soup(STRIP_TAGS):
@@ -87,15 +144,16 @@ def fetch_job_description(url: str) -> str:
         if node is None:
             continue
         candidate = _clean_text(node.get_text("\n"))
-        if len(candidate) >= MIN_TEXT_LENGTH:
+        if _looks_like_prose(candidate):
             text = candidate
             break
 
-    if len(text) < MIN_TEXT_LENGTH:
+    if not text:
         raise FetchError(
-            f"Extracted only {len(text)} characters from {url}. The page "
-            "likely requires JavaScript or a login (common for LinkedIn/"
-            "Indeed). Copy the posting into job_description.txt manually."
+            f"Could not extract a readable job posting from {url}. The "
+            "page likely requires JavaScript or a login (common for "
+            "LinkedIn/Indeed), or has no embedded JobPosting data. Copy "
+            "the posting into job_description.txt manually."
         )
     return text
 
