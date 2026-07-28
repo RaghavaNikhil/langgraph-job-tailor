@@ -1,0 +1,35 @@
+# Candidate Profile Template
+#
+# Copy this file to profile.txt (git-ignored — your real answers never
+# get committed) and fill in your own details. Every node in the graph
+# treats profile.txt as ground truth it may never contradict, exceed, or
+# guess around — it exists specifically to stop the AI from inventing or
+# distorting personal facts to look like a better match for a job.
+#
+# Lines are free text — the AI reads this whole file, so keep each field
+# on its own line with a clear label. Section headers (===) are for
+# human readability only.
+
+=== WORK AUTHORIZATION ===
+Status: <e.g. "US Citizen" / "Green Card holder" / "H-1B visa" / "F-1 visa, STEM OPT">
+Requires future sponsorship: <yes/no>
+Security clearance: <e.g. "Active Secret clearance" / "Eligible, no current clearance" / "Not eligible (not a US citizen)">
+
+=== LOCATION ===
+Current location: <City, State/Country>
+Willing to relocate: <yes/no>
+Work location preference: <onsite / hybrid / remote / no preference>
+
+=== EXPERIENCE ===
+Years of experience: <e.g. "4+ years" — this exact phrase is always used verbatim in resumes and cover letters; it is never calculated from your employment dates>
+
+=== VOLUNTARY EEO SELF-IDENTIFICATION ===
+# These are NEVER included in a resume or cover letter under any
+# circumstance. They exist only so a future auto-apply feature can fill
+# in the optional EEO self-identification questions many application
+# forms include. Leave any line as "Prefer not to answer" if you'd
+# rather not store it.
+Gender: Prefer not to answer
+Race/ethnicity: Prefer not to answer
+Veteran status: Prefer not to answer
+Disability status: Prefer not to answer

@@ -15,6 +15,9 @@ class TailoringState(TypedDict):
         candidate_profile: Authoritative personal facts (work authorization,
             location, etc.) the writer must never contradict.
         selected_resume_name: Name of the version chosen by the Selector.
+        eligibility_blocked: True if the Eligibility Check found a hard
+            legal/logistical blocker (short-circuits straight to END).
+        eligibility_reason: Explanation from the Eligibility Check.
         base_resume: Text of the selected resume version (never mutated).
         tailored_resume: The latest rewrite produced by the Writer node.
         critic_feedback: Actionable feedback items from the ATS Critic.
@@ -29,6 +32,8 @@ class TailoringState(TypedDict):
     master_resume: str
     candidate_profile: str
     selected_resume_name: str
+    eligibility_blocked: bool
+    eligibility_reason: str
     selected_projects: List[str]
     base_resume: str
     tailored_resume: str

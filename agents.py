@@ -132,6 +132,92 @@ def resume_selector_node(state: TailoringState) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Eligibility Check Agent
+# ---------------------------------------------------------------------------
+
+
+class EligibilityCheck(BaseModel):
+    """Structured verdict returned by the Eligibility Check."""
+
+    blocked: bool = Field(
+        ...,
+        description=(
+            "True only if the job description states a hard, explicit "
+            "legal or logistical requirement the candidate profile "
+            "clearly cannot meet. False for anything softer."
+        ),
+    )
+    reason: str = Field(
+        ...,
+        description=(
+            "If blocked, the specific requirement and why the profile "
+            "conflicts with it. If not blocked, a brief note confirming "
+            "no hard blockers were found."
+        ),
+    )
+
+
+ELIGIBILITY_SYSTEM_PROMPT = """\
+You are a conservative eligibility screener. Your only job is to catch \
+job postings the candidate is LEGALLY OR LOGISTICALLY unable to take, \
+before any time is spent tailoring a resume for them.
+
+Flag as blocked ONLY when the job description states an explicit, hard \
+requirement that directly conflicts with the CANDIDATE PROFILE:
+- Requires US citizenship (not just general work authorization) and the \
+profile is not a US citizen.
+- Requires an active security clearance or clearance eligibility the \
+profile explicitly lacks.
+- States visa sponsorship is not available, now or in the future, and \
+the profile requires future sponsorship.
+- Requires onsite work in a specific location that is not the profile's \
+location, AND the profile says it is not willing to relocate, AND the \
+profile's work location preference does not allow it.
+
+DO NOT flag:
+- Generic phrasing like "must be eligible to work in the US" — visa/OPT \
+holders can be eligible; this is not a citizenship requirement.
+- Preferences, "nice to have"s, or soft language ("prefer", "ideally").
+- Any skill, experience, or years-of-experience gap — those are not \
+legal or logistical blockers, and are handled elsewhere.
+- Remote/hybrid roles, or onsite roles when the profile is willing to \
+relocate or has no location preference.
+
+When genuinely uncertain, do NOT block — false negatives (proceeding on \
+a borderline case) cost a few API calls; false positives (blocking a \
+job the candidate could actually take) cost a real opportunity."""
+
+ELIGIBILITY_HUMAN_PROMPT = """\
+JOB DESCRIPTION:
+{job_description}
+
+CANDIDATE PROFILE:
+{candidate_profile}
+
+Determine eligibility now."""
+
+
+def eligibility_check_node(state: TailoringState) -> dict:
+    """Screen for hard legal/logistical blockers before the expensive loop."""
+    llm = _get_llm(temperature=0.0).with_structured_output(EligibilityCheck)
+    prompt = ChatPromptTemplate.from_messages(
+        [("system", ELIGIBILITY_SYSTEM_PROMPT), ("human", ELIGIBILITY_HUMAN_PROMPT)]
+    )
+    result: EligibilityCheck = (prompt | llm).invoke(
+        {
+            "job_description": state["job_description"],
+            "candidate_profile": state.get("candidate_profile")
+            or "(no profile provided)",
+        }
+    )
+    if result.blocked:
+        print(f"[eligibility] BLOCKED: {result.reason}")
+    else:
+        print(f"[eligibility] Clear to proceed: {result.reason}")
+    return {"eligibility_blocked": result.blocked, "eligibility_reason": result.reason}
+
+
+# ---------------------------------------------------------------------------
 # Project Picker Agent
 # ---------------------------------------------------------------------------
 
@@ -243,6 +329,13 @@ simply OMIT the topic from the resume entirely. Do not lie, do not hint.
 EXACTLY the phrase given in the CANDIDATE PROFILE's "Years of experience" \
 line, verbatim, every time — even if the job description asks for a \
 different amount, even if the dates would imply a different number.
+- NEVER include voluntary EEO self-identification information — gender, \
+race, ethnicity, veteran status, disability status, age, marital \
+status, religion, or similar protected-class characteristics — in the \
+resume or cover letter under ANY circumstance, even if present in the \
+CANDIDATE PROFILE, even if the job description asks for it. These \
+fields are stored only for a future application-form auto-fill step \
+and have no place in resume or cover letter content.
 
 COMPLETENESS — tailoring is rephrasing, NOT trimming:
 - Preserve EVERY section of the base resume (summary, skills, every \
@@ -422,6 +515,11 @@ description asks for or to what the employment dates would imply.
 or employment type in the tailored resume must match the BASE RESUME. \
 Flag and deduct heavily if it was changed (e.g. to "Intern" or a more \
 junior/senior title) to better match the target role's level.
+- EEO fields: if the resume or cover letter mentions gender, race, \
+ethnicity, veteran status, disability status, age, marital status, \
+religion, or similar protected-class characteristics, this is an \
+automatic score cap of 40 and the first feedback item, regardless of \
+whether the CANDIDATE PROFILE contains that information.
 
 Today's date is {current_date}. Use it when judging whether employment \
 dates are plausible.
@@ -631,6 +729,11 @@ technology like "GCP" must stay generic.
 clearance eligibility, or location unless it appears in the CANDIDATE \
 PROFILE. If the job requires a status the profile does not support, omit \
 the topic entirely.
+- NEVER include voluntary EEO self-identification information — gender, \
+race, ethnicity, veteran status, disability status, age, marital \
+status, religion, or similar protected-class characteristics — under \
+ANY circumstance, even if present in the CANDIDATE PROFILE. These \
+fields are stored only for a future application-form auto-fill step.
 
 Style rules:
 - 3 to 4 short paragraphs, 250-320 words total. Confident, specific, \

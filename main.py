@@ -160,6 +160,8 @@ def main() -> None:
         "master_resume": master,
         "candidate_profile": profile,
         "selected_resume_name": "",
+        "eligibility_blocked": False,
+        "eligibility_reason": "",
         "selected_projects": [],
         "base_resume": "",
         "tailored_resume": "",
@@ -176,6 +178,29 @@ def main() -> None:
     print("=" * 70)
 
     final_state = app.invoke(initial_state)
+
+    company = final_state["job_company"] or "Company"
+    role = final_state["job_role"] or "Role"
+
+    if final_state["eligibility_blocked"]:
+        print("\n" + "=" * 70)
+        print("BLOCKED — not proceeding with this application")
+        print(f"Company/Role: {company} / {role}")
+        print(f"Reason: {final_state['eligibility_reason']}")
+        print("=" * 70)
+        tracker_path = log_application(
+            company=company,
+            role=role,
+            ats_score="",
+            resume_version=final_state["selected_resume_name"],
+            resume_file="",
+            cover_letter_file="",
+            job_url=job_url,
+            status="blocked",
+            notes=final_state["eligibility_reason"],
+        )
+        print(f"Logged to tracker: {tracker_path.name}")
+        return
 
     print("\n" + "=" * 70)
     print(f"SELECTED VERSION: {final_state['selected_resume_name']}")
@@ -201,8 +226,6 @@ def main() -> None:
     if applicant_name.isupper():
         applicant_name = applicant_name.title()
     contact_line = base_lines[1] if len(base_lines) > 1 else ""
-    company = final_state["job_company"] or "Company"
-    role = final_state["job_role"] or "Role"
     base_name = safe_filename(f"{applicant_name} - {company} {role}")
 
     pdf_path = render_pdf(resume_text, PROJECT_DIR / f"{base_name} Resume.pdf")
