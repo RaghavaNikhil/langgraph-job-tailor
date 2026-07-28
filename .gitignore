@@ -9,7 +9,7 @@ __pycache__/
 resumes/
 profile.txt
 job_description.txt
-applications.csv
+applications*.csv
 
 # Generated outputs
 tailored_resume*.pdf
