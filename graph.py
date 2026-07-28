@@ -1,8 +1,9 @@
 """Graph assembly for the Automated Job Tailoring workflow.
 
 Topology:
-    START -> selector -> writer -> critic
-        -> [score >= 85 or iterations >= 3 ? cover_letter -> END : writer]
+    START -> selector -> eligibility_check
+        -> [blocked ? END : project_picker -> writer -> critic
+            -> [score >= 85 or iterations >= 3 ? cover_letter -> END : writer]]
 """
 
 from typing import Literal
@@ -12,12 +13,18 @@ from langgraph.graph import END, START, StateGraph
 from agents import (
     ats_critic_node,
     cover_letter_node,
+    eligibility_check_node,
     project_picker_node,
     resume_selector_node,
     resume_writer_node,
     scrubber_node,
 )
 from state import ATS_SCORE_THRESHOLD, MAX_ITERATIONS, TailoringState
+
+
+def route_on_eligibility(state: TailoringState) -> Literal["blocked", "proceed"]:
+    """Short-circuit straight to END if a hard blocker was found."""
+    return "blocked" if state["eligibility_blocked"] else "proceed"
 
 
 def route_on_score(state: TailoringState) -> Literal["writer", "cover_letter"]:
@@ -51,6 +58,7 @@ def build_graph():
     workflow = StateGraph(TailoringState)
 
     workflow.add_node("selector", resume_selector_node)
+    workflow.add_node("eligibility_check", eligibility_check_node)
     workflow.add_node("project_picker", project_picker_node)
     workflow.add_node("writer", resume_writer_node)
     workflow.add_node("critic", ats_critic_node)
@@ -58,7 +66,12 @@ def build_graph():
     workflow.add_node("cover_letter", cover_letter_node)
 
     workflow.add_edge(START, "selector")
-    workflow.add_edge("selector", "project_picker")
+    workflow.add_edge("selector", "eligibility_check")
+    workflow.add_conditional_edges(
+        "eligibility_check",
+        route_on_eligibility,
+        {"blocked": END, "proceed": "project_picker"},
+    )
     workflow.add_edge("project_picker", "writer")
     workflow.add_edge("writer", "critic")
     workflow.add_conditional_edges(
